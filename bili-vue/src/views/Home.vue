@@ -51,7 +51,7 @@ import router from "@/router";
 
 export default {
   mounted() {
-    this.videoUrl = this.$store.state.videoUrl || "";
+    this.videoUrl = this.$store.state.video.videoUrl || "";
   },
 
   data() {
@@ -69,7 +69,7 @@ export default {
   },
 
   methods: {
-    ...mapActions(['saveData', 'setVideoUrl']),
+    ...mapActions('video', ['saveData', 'setVideoUrl']),
 
     // 新增步骤控制方法
     handleNextStep() {
@@ -79,7 +79,7 @@ export default {
       }
 
       this.saveData({
-        bgUrl: this.imgUrl(),
+        bgUrl: `/proxy-image?url=${this.bgUrl}`,
         avid: this.avid,
         p: this.p,
         pages: this.pages,
@@ -155,10 +155,6 @@ export default {
         })
       })
     },
-    // 获取视频封面
-    imgUrl() {
-      return this.bgUrl ? "https" + this.bgUrl.substring(4) : ""
-    }
   },
 };
 </script>

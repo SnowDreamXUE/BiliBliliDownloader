@@ -5,32 +5,54 @@
       <el-button type="primary" round @click="downloadAll">全部下载</el-button>
     </div>
     <div v-for="item in downloadUrls" :key="item.cid" class="download-item">
-      <el-col :span="12">
-        <div class="video-title">{{ item.title }}</div>
-      </el-col>
+      <div class="video-pic">
+        <img :src="pic" alt="封面"/>
+      </div>
 
-      <el-col :span="7">
-        <div class="video-quality">
-          <el-select
-              class="select-quality"
-              v-model="item.qn"
-              placeholder="选择清晰度"
-              @change="getDownloadUrl(item.cid,item.qn)"
-          >
-            <el-option
-                v-for="(option, index) in item.Qualities"
-                :key="index"
-                :label="option.label"
-                :value="option.value"
-            ></el-option>
-          </el-select>
+      <div class="video-info">
+        <div class="download-item-top">
+          <div class="video-title">{{ item.title }}</div>
+          <div class="download-action">
+            <el-button type="primary" round size="mini" @click="downVideo(item)">下载</el-button>
+          </div>
         </div>
-      </el-col>
-      <el-col :span="5">
-       <div class="download-action">
-         <el-button type="primary" @click="downVideo(item)">下载</el-button>
-       </div>
-      </el-col>
+        <div class="video-select">
+          <div class="audio-quality">
+            <el-select
+                class="select-quality"
+                v-model="item.audioId"
+                size="small"
+                placeholder="选择音频码率"
+                @change="selectDownloadFormat(item)"
+            >
+              <el-option
+                  v-for="(value, key) in audioIds"
+                  :key="key"
+                  :label="value"
+                  :value="key"
+              ></el-option>
+            </el-select>
+          </div>
+
+          <div class="video-quality">
+            <el-select
+                class="select-quality"
+                v-model="item.videoKey"
+                size="small"
+                placeholder="选择清晰度"
+                @change="selectDownloadFormat(item)"
+            >
+              <el-option
+                  v-for="video in filteredVideos(item)"
+                  :key="`${video.id}_${video.codecid}`"
+                  :label="getQualityLabel(video)"
+                  :value="`${video.id}_${video.codecid}`"
+              ></el-option>
+            </el-select>
+          </div>
+
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -38,6 +60,7 @@
 <script>
 import axios from "axios";
 import {mapActions} from "vuex";
+
 axios.defaults.baseURL = "http://localhost:8989"
 
 export default {
@@ -47,9 +70,28 @@ export default {
     return {
       avid: "",
       p: "",
+      pic: "",
       pages: [],          // 所有分集信息
       selectedPages: [],  // 选中的分集索引
       downloadUrls: [],   // 分集下载链接
+      audioIds: { // 音频码率
+        '30280': "192K",
+        '30216': "64K",
+        '30232': "132K",
+      },
+      qualities: { // 视频清晰度
+        '116': "1080P60",
+        '112': "1080P+",
+        '80': "1080P",
+        '74': "720P60",
+        '64': "720P",
+        '32': "480P",
+        '16': "360P",
+      },
+      codecNames: { // 视频编码格式
+        7: 'AVC',
+        12: 'HEVC',
+      },
     }
   },
 
@@ -59,14 +101,15 @@ export default {
   },
 
   methods: {
-    ...mapActions(['removeSelectedPage']),
+    ...mapActions('video', ['removeSelectedPage']),
 
     init() {
-      const videoData = this.$store.state;
+      const videoData = this.$store.state.video;
 
       // 将 Vuex 中的数据赋值给组件的 data
       this.avid = videoData.avid || "";
       this.p = videoData.p || "";
+      this.pic = videoData.bgUrl || "";
       this.pages = videoData.pages || [];
       this.selectedPages = videoData.selectedPages || [];
     },
@@ -78,7 +121,7 @@ export default {
       try {
         // 获取所有选中分集的下载链接
         const promises = this.selectedPages.map(cid => {
-          return this.getDownloadUrl(cid, 80);
+          return this.getDownloadUrl(cid);
         });
 
         await Promise.all(promises);
@@ -95,52 +138,29 @@ export default {
     },
 
     // 修改后的获取下载链接方法
-    async getDownloadUrl(cid, qn) {
+    async getDownloadUrl(cid) {
       try {
-        const res = await axios.get(`/download/${this.avid}/${cid}?qn=${qn}`);
+        const res = await axios.get(`/download/${this.avid}/${cid}`);
         // console.log(res.data);
 
-        // 提取清晰度选项
-        let accept_description = res.data.data.accept_description;
-        let accept_quality = res.data.data.accept_quality;
-        const Qualities = accept_description.map((_, index) => ({
-          value: accept_quality[index],
-          label: accept_description[index],
-        }));
+        // 获取支持的清晰度列表并转换为字符串
+        const supportedQualities = res.data.data.accept_quality.map(String);
 
-        // 处理DASH格式的视频和音频
-        const videoData = res.data.data.dash.video || [];
-        const audioData = res.data.data.dash.audio || [];
-
-        // 示例：选择最高质量的视频和音频流（根据实际需求调整）
-        const bestVideo = videoData.find(video => video.id === qn);
-        const bestAudio = audioData[0]; // 假设音频只有一种选择
-
-        if (bestVideo && bestAudio) {
-          const title = this.pages.find(p => p.cid === cid).part;
-
-          // 更新下载链接（这里我们假设只需要视频链接，实际情况可能需要合成音视频）
-          const existing = this.downloadUrls.find(item => item.cid === cid);
-          if (existing) {
-            existing.videoUrl = bestVideo.baseUrl; // 使用视频的基本URL作为下载链接
-            existing.audioUrl = bestAudio.baseUrl; // 如果也需要音频链接的话
-          } else {
-            this.downloadUrls.push({
-              cid,
-              videoUrl: bestVideo.baseUrl,
-              audioUrl: bestAudio.baseUrl, // 如果也需要音频链接的话
-              title,
-              Qualities,
-              qn
-            });
-          }
-        } else {
-          this.$notify.error({
-            title: '获取链接失败',
-            message: `CID:${cid} 清晰度${qn}不可用或无音频流`,
-            duration: 3000
-          });
-        }
+        // 初始化视频流选择
+        const firstVideo = res.data.data.dash.video[0];
+        const item = {
+          cid,
+          videoData: res.data.data.dash.video,
+          audioData: res.data.data.dash.audio,
+          title: this.pages.find(p => p.cid === cid).part,
+          supportedQualities,
+          videoKey: `${firstVideo.id}_${firstVideo.codecid}`,
+          audioId: String(res.data.data.dash.audio[0]?.id || ''),
+          videoUrl: '',
+          audioUrl: '',
+        };
+        this.downloadUrls.push(item);
+        this.selectDownloadFormat(item);
       } catch (error) {
         this.$notify.error({
           title: '获取链接失败',
@@ -150,7 +170,50 @@ export default {
       }
     },
 
+    // 获取视频质量标签
+    getQualityLabel(video) {
+      const qualityName = this.qualities[video.id] || video.id;
+      const codecName = this.codecNames[video.codecid] || `Codec ${video.codecid}`;
+      return `${qualityName} ${codecName}`;
+    },
 
+    // 过滤支持的视频流
+    filteredVideos(item) {
+      return item.videoData.filter(video =>
+          item.supportedQualities.includes(String(video.id))
+      );
+    },
+
+    // 选择下载的格式
+    selectDownloadFormat(item) {
+      if (!item.videoKey) return;
+
+      const [id, codecid] = item.videoKey.split('_');
+      const videoObj = item.videoData.find(v =>
+          String(v.id) === id && String(v.codecid) === codecid
+      );
+
+      if (videoObj) {
+        item.videoUrl = videoObj.baseUrl;
+      } else {
+        this.$notify.error({
+          title: '错误',
+          message: '无法找到对应的视频流',
+        });
+      }
+
+      // 处理音频部分（保持原逻辑）
+      const audioObj = item.audioData.find(a => String(a.id) === item.audioId);
+      item.audioUrl = audioObj?.baseUrl;
+      if (!item.audioUrl) {
+        this.$notify.error({
+          title: '获取音频失败',
+          message: `CID:${item.cid} 音频码率不可用`,
+        });
+      }
+    },
+
+    // 单视频下载
     downVideo(item) {
       let videoData = {
         title: item.title,
@@ -158,7 +221,7 @@ export default {
         audioUrl: item.audioUrl,
         qn: item.qn
       }
-      axios.post(`/downloadVideo`,videoData).then(res => {
+      axios.post(`/downloadVideo`, videoData).then(res => {
         this.$notify.info({
           title: '下载成功',
           message: res.data,
@@ -179,6 +242,11 @@ export default {
         });
       })
     },
+
+    // 测试使用downVideo方法
+    // downVideo(item) {
+    //   console.log(item);
+    // },
 
     // 全部下载功能
     downloadAll() {
@@ -213,7 +281,7 @@ export default {
       });
     }
 
-  }
+  },
 }
 </script>
 
@@ -239,34 +307,60 @@ export default {
 
 .download-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin: 15px 0;
+  margin: 20px 0;
   padding: 12px;
   border-radius: 6px;
-  background: #f8f8f8;
-  width: 70%;
-  height: 100px;
+  border: #d27ed8 2px solid;
+  width: 80%;
+  height: 150px;
 
-  .video-title {
-    font-weight: 500;
-    color: #333;
-    margin: 10px;
+}
+
+.video-info {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.download-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 40px;
+  margin-bottom: 10px;
+}
+
+.download-action {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+
+}
+
+.video-pic {
+  display: flex;
+  height: 100%;
+  justify-items: center;
+  margin-right: 20px;
+
+  img {
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
   }
+}
 
-  .video-quality {
-    display: flex;
-    justify-content: center;
+.video-select {
+  display: flex;
+  justify-content: left;
+  justify-items: center;
+}
 
-    .select-quality {
-      width: 80%;
-    }
-  }
-
-  .download-action {
-    display: flex;
-    justify-content: center;
-
-  }
+.select-quality {
+  width: 120px;
+  margin-right: 20px;
 }
 </style>

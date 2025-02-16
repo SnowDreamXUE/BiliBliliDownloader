@@ -12,17 +12,17 @@ public class videoDownload {
         String audioUrl = "https://cn-gdgz-gd-live-03.bilivideo.com/upgcxcode/62/66/28223406662/28223406662-1-30280.m4s?e=ig8euxZM2rNcNbdlhoNvNC8BqJIzNbfqXBvEqxTEto8BTrNvN0GvT90W5JZMkX_YN0MvXg8gNEV4NC8xNEV4N03eN0B5tZlqNxTEto8BTrNvNeZVuJ10Kj_g2UB02J0mN0B5tZlqNCNEto8BTrNvNC7MTX502C8f2jmMQJ6mqF2fka1mqx6gqj0eN0B599M=&uipk=5&nbs=1&deadline=1738919413&gen=playurlv2&os=bcache&oi=1996680607&trid=00008fcadf0a98b14f54a0657e814ce884d7u&mid=497373611&platform=pc&og=hw&upsig=25c389fab70eb18a01ccd012dbc9de65&uparams=e,uipk,nbs,deadline,gen,os,oi,trid,mid,platform,og&cdnid=6698&bvc=vod&nettype=0&orderid=0,3&buvid=&build=0&f=u_0_0&agrr=1&bw=21629&logo=80000000";
 
         // 下载视频文件
-        String videoFilePath = "video.m4s";
-        downloadFile(videoUrl, videoFilePath);
-        System.out.println("视频文件下载完成: " + videoFilePath);
+        String videoFilePath = "D:/SnowObject/BiliBiliDownloader/download/【拿铁助眠】搓到上头！搓出千层饼の手部音效 免疫向助眠_video.m4s";
+//        downloadFile(videoUrl, videoFilePath);
+//        System.out.println("视频文件下载完成: " + videoFilePath);
 
         // 下载音频文件
-        String audioFilePath = "audio.m4s";
-        downloadFile(audioUrl,  audioFilePath);
-        System.out.println("音频文件下载完成: " + audioFilePath);
+        String audioFilePath = "D:/SnowObject/BiliBiliDownloader/download/【拿铁助眠】搓到上头！搓出千层饼の手部音效 免疫向助眠_audio.m4s";
+//        downloadFile(audioUrl,  audioFilePath);
+//        System.out.println("音频文件下载完成: " + audioFilePath);
 
         // 合并音视频（可选）
-        String outputFilePath = "output.mp4";
+        String outputFilePath = "D:/SnowObject/BiliBiliDownloader/download/【拿铁助眠】搓到上头！搓出千层饼の手部音效 免疫向助眠.mp4";
         mergeVideoAndAudio(videoFilePath, audioFilePath, outputFilePath);
         System.out.println("音视频合并完成: " + outputFilePath);
     }

@@ -35,12 +35,12 @@ public class BiliController {
     @GetMapping("/download/{avid}/{cid}")
     public String getDownloadUrl(
             @PathVariable("avid") String avid,
-            @PathVariable("cid") String cid,
-            @RequestParam("qn") String qn) {
+            @PathVariable("cid") String cid
+    ) {
 
         // 构建API URL并直接附加上查询参数
-        String apiUrl = String.format("https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&qn=%s&fnval=80",
-                avid, cid, qn);
+        String apiUrl = String.format("https://api.bilibili.com/x/player/playurl?avid=%s&cid=%s&fnval=16",
+                avid, cid);
 
         // 调用 Cookie 类的 getCookiesFromFile 方法，获取 cookies 字符串
         String cookiesString = new Cookie().getCookiesFromFile();

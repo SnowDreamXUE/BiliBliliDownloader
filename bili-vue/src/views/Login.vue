@@ -1,7 +1,6 @@
 <template>
   <div class="login">
     <el-card>
-      <el-button type="primary" @click="getUserInfo">查询是否登录</el-button>
       <el-button type="primary" @click="login_url()">生成登录二维码</el-button>
       <el-button type="primary" @click="stopCheck()">终止轮询</el-button>
     </el-card>
@@ -12,6 +11,7 @@
 <script>
 import QRCode from "qrcode";
 import axios from "axios";
+import {mapActions} from "vuex";
 
 axios.defaults.baseURL = "http://localhost:8989"
 
@@ -26,7 +26,7 @@ export default {
     }
   },
   methods: {
-
+    ...mapActions('userInfo', ['setData']),
     // 生成登录二维码
     login_url() {
       axios.get("/login_url").then(res => {
@@ -39,7 +39,7 @@ export default {
 
           // 使用 $nextTick 确保 DOM 已更新后再生成二维码
           this.$nextTick(() => {
-            QRCode.toCanvas(document.getElementById("qrcode"), this.login_image_url, { width: 200 }, (error) => {
+            QRCode.toCanvas(document.getElementById("qrcode"), this.login_image_url, {width: 200}, (error) => {
               if (error) {
                 console.error("生成二维码失败:", error);
               }
@@ -70,11 +70,7 @@ export default {
           if (data.code === 0) {
             // 登录成功
             // console.log('登录成功:', data);
-            this.$notify.success({
-              title: '登录成功',
-              message: '欢迎',
-              duration: 3000
-            });
+            this.getUserInfo();
             clearInterval(this.pollingIntervalId); // 停止轮询
           } else if (data.code === 86038) {
             // 二维码已失效
@@ -134,19 +130,27 @@ export default {
     getUserInfo() {
       axios.get("/user_info").then(res => {
         // console.log(res.data)
-        if(res.data.data.isLogin) {
-          this.$notify.success({
-            title: "已登录",
-            message: "你好，" + res.data.data.uname + "!"
+        if (res.data.data.isLogin) {
+          this.uname = res.data.data.uname
+          this.face = res.data.data.face
+          this.setData({
+            uname: this.uname,
+            face: this.face
           })
-        }else {
+          this.$notify.success({
+            title: "登录成功",
+            message: "欢迎，" + this.uname + "!",
+            duration: 3000
+          })
+        } else {
           this.$notify.error({
-            title: "未登录",
-            message: "请先登录，获取最高清晰度!"
+            title: "登录失败",
+            message: "请重新尝试登录!",
+            duration: 3000
           })
         }
       })
-    }
+    },
   }
 }
 </script>

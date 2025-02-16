@@ -41,7 +41,6 @@ public class DownloadController {
             new File(audioFilePath).delete();
             return "合并成功！文件储存在：" + mergedFile.getAbsolutePath();
         } else {
-
             return "合并后的文件不存在，未删除原始文件！";
         }
 
@@ -71,6 +70,7 @@ public class DownloadController {
     private static void mergeVideoAndAudio(String videoFilePath, String audioFilePath, String mergedFilePath) {
         try {
             // 使用 FFmpeg 合并音视频
+            // 更换ffmpeg路径
             String ffmpegCommand = String.format("D:/Program Files/ffmpeg-7.1-essentials_build/bin/ffmpeg -i %s -i %s -c copy %s", videoFilePath, audioFilePath, mergedFilePath);
             Process process = Runtime.getRuntime().exec(ffmpegCommand);
             process.waitFor(); // 等待合并完成
