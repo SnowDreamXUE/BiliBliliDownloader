@@ -37,7 +37,7 @@ public class DownloadController {
 
         if (new File(mergedFilePath).exists()) {
             taskProgressService.removeTask(taskId); // 移除任务
-            return ResponseEntity.status(HttpStatus.CONFLICT).body("File already exists"); // 返回冲突状态码
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("文件已存在"); // 返回冲突状态码
         }
 
         CompletableFuture.runAsync(() -> {

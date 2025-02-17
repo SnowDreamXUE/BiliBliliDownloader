@@ -1,9 +1,10 @@
 <template>
   <div class="download-page">
-    <div v-if="downloadUrls.length === 0" class="no-data">暂无数据</div>
-    <div v-if="downloadUrls.length > 1" class="once">
-      <el-button type="primary" round @click="downloadAll">全部下载</el-button>
+    <div class="once">
+      <el-button type="success" size="small" round @click="downloadAll" :disabled="isDownloading">全部下载</el-button>
+      <el-button type="danger" size="small" round @click="cleanPages" :disabled="isDownloading">清空列表</el-button>
     </div>
+    <div v-if="downloadUrls.length === 0" class="no-data">暂无数据</div>
     <div v-for="item in downloadUrls" :key="item.cid" class="download-item">
       <div class="video-pic">
         <img :src="pic" alt="封面"/>
@@ -13,6 +14,23 @@
         <div class="download-item-top">
           <div class="video-title">{{ item.title }}</div>
           <div class="download-action">
+            <!-- 封面下载 -->
+            <el-button
+                type="primary"
+                round size="mini"
+                @click="downloadCover(item)"
+                :disabled="item.status === 'downloading'"
+            >
+              封面下载
+            </el-button>
+            <el-button
+                type="primary"
+                round size="mini"
+                @click="downloadAudio(item)"
+                :disabled="item.status === 'downloading'"
+            >
+              mp3下载
+            </el-button>
             <el-button
                 type="primary"
                 round size="mini"
@@ -26,10 +44,11 @@
         </div>
         <div class="video-select">
           <div class="audio-quality">
+            <div class="select-span">音质</div>
             <el-select
                 class="select-quality"
                 v-model="item.audioId"
-                size="small"
+                size="mini"
                 placeholder="选择音频码率"
                 @change="selectDownloadFormat(item)"
                 :disabled="item.status === 'downloading'"
@@ -44,10 +63,11 @@
           </div>
 
           <div class="video-quality">
+            <div class="select-span">画质</div>
             <el-select
                 class="select-quality"
                 v-model="item.videoKey"
-                size="small"
+                size="mini"
                 placeholder="选择清晰度"
                 @change="selectDownloadFormat(item)"
                 :disabled="item.status === 'downloading'"
@@ -120,7 +140,7 @@ export default {
   },
 
   methods: {
-    ...mapActions('video', ['removeSelectedPage']),
+    ...mapActions('video', ['removeSelectedPage', 'clearData']),
 
     init() {
       const videoData = this.$store.state.video;
@@ -236,7 +256,7 @@ export default {
       if (item.status === 'downloading') {
         return '下载中';
       }
-      return '下载';
+      return '视频下载';
     },
 
     getProgressText(item) {
@@ -270,6 +290,56 @@ export default {
       return null; // 返回 undefined 而不是空字符串
     },
 
+    // 封面下载
+    downloadCover(item) {
+      const link = document.createElement('a');
+      link.href = this.pic; // 使用封面图片的 URL
+      link.download = `${item.title}.jpg`; // 设置下载文件名
+      link.click();
+    },
+
+    // 音频下载
+    async downloadAudio(item) {
+      const audioData = {
+        title: item.title,
+        audioUrl: item.audioUrl,
+      }
+      try {
+        const res = await axios.post('/downloadAudio', audioData)
+        if (res.status === 409) {
+          this.$notify.warning({
+            title: '音频文件已存在',
+            message: `${item.title}.mp3 已经下载过，无需重复下载`,
+          });
+          return
+        }
+        if (res.status === 200) {
+          this.$notify.success({
+            title: '下载完成',
+            message: `${item.title}.mp3 音频下载成功`
+          });
+        } else {
+          this.$notify.error({
+            title: '下载失败',
+            message: res.data
+          });
+        }
+      } catch (error) {
+        if (error.response && error.response.status === 409) { // 特殊处理文件已存在的错误
+          this.$notify.warning({
+            title: '音频文件已存在',
+            message: `${item.title}.mp3 已经下载过，无需重复下载`
+          });
+        } else {
+          this.$notify.error({
+            title: '下载失败',
+            message: error.message
+          });
+        }
+      }
+    },
+
+    // 视频下载
     async downVideo(item) {
       // 设置下载状态
       this.$set(item, 'status', 'downloading');
@@ -293,11 +363,11 @@ export default {
         }
 
         const taskId = response.data
-        this.$set(this.progresses, item.cid, { progress: 0, stage: 'INIT' });
+        this.$set(this.progresses, item.cid, {progress: 0, stage: 'INIT'});
 
         const checkProgress = async () => {
           try {
-            const { data: progressData } = await axios.get(`/task/${taskId}/progress`);
+            const {data: progressData} = await axios.get(`/task/${taskId}/progress`);
 
             this.$set(this.progresses, item.cid, {
               progress: progressData.progress,
@@ -382,8 +452,35 @@ export default {
           duration: 3000
         });
       });
-    }
+    },
 
+    // 清空列表
+    cleanPages() {
+      this.$confirm('确认要清空下载列表吗？', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        this.downloadUrls = [];
+        this.clearData();
+        this.$notify.success({
+          title: '操作成功',
+          message: '已清空下载列表',
+          duration: 3000
+        });
+      }).catch(() => {
+        this.$notify.info({
+          title: '已取消',
+          message: '清空下载列表已取消',
+          duration: 3000
+        });
+      });
+    },
+  },
+  computed: {
+    isDownloading() {
+      return this.downloadUrls.some(item => item.status === 'downloading');
+    }
   },
 }
 </script>
@@ -395,17 +492,28 @@ export default {
   align-items: center;
   height: calc(100vh - 40px);
   overflow: auto;
-  margin: 20px 0;
+  margin-bottom: 20px;
 }
 
 .no-data {
   font-size: 20px;
   color: #999;
-  margin-top: 20px;
+  margin-top: 40px;
 }
 
 .once {
-  width: 70%;
+  width: 100%;
+  height: 60px;
+  border-bottom: #e6e6e6 1px solid;
+  display: flex;
+  align-items: center;
+  justify-content: right;
+  padding-right: 20px;
+
+  .el-button {
+    margin-right: 20px;
+  }
+
 }
 
 .download-item {
@@ -439,8 +547,6 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
-
-
 }
 
 .video-pic {
@@ -460,6 +566,22 @@ export default {
   display: flex;
   justify-content: left;
   justify-items: center;
+
+  .audio-quality,
+  .video-quality {
+    display: flex;
+    justify-content: space-between;
+    justify-items: center;
+
+    .select-span {
+      display: flex;
+      justify-items: center;
+      align-items: center;
+      width: 30px;
+      font-size: small;
+      margin-right: 5px;
+    }
+  }
 }
 
 .select-quality {
@@ -470,6 +592,7 @@ export default {
 .progress-container {
   margin-top: 10px;
 }
+
 .progress-info {
   margin-bottom: 5px;
   font-size: 12px;

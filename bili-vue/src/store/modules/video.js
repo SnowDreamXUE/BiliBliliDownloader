@@ -77,6 +77,7 @@ const actions = {
     },
 
     clearData(context) {
+        context.commit('setBgUrl', '')
         context.commit('setAvid', '')
         context.commit('setP', '')
         context.commit('setPages', [])
