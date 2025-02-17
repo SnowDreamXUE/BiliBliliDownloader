@@ -6,10 +6,11 @@ import com.snow.utils.DownloadProgress;
 
 import com.snow.utils.Video;
 import com.snow.utils.ProgressListener;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.annotation.Resource;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -18,22 +19,29 @@ import java.util.concurrent.CompletableFuture;
 @RestController
 public class DownloadController {
 
-    @Autowired
+    @Resource
     private TaskProgressService taskProgressService;
 
     private static final String downloadPath = "download/";
 
     @PostMapping("/downloadVideo")
     public ResponseEntity<String> downloadVideo(@RequestBody Video video) {
+
         String taskId = taskProgressService.createNewTask();
+
+        String originTitle = video.getTitle();
+        String title = originTitle.replaceAll("[\\\\/]", "_");
+        String videoFilePath = downloadPath + title + "_video.m4s";
+        String audioFilePath = downloadPath + title + "_audio.m4s";
+        String mergedFilePath = downloadPath + title + ".mp4";
+
+        if (new File(mergedFilePath).exists()) {
+            taskProgressService.removeTask(taskId); // 移除任务
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("File already exists"); // 返回冲突状态码
+        }
 
         CompletableFuture.runAsync(() -> {
             try {
-                String title = video.getTitle();
-                String videoFilePath = downloadPath + title + "_video.m4s";
-                String audioFilePath = downloadPath + title + "_audio.m4s";
-                String mergedFilePath = downloadPath + title + ".mp4";
-
                 // 下载视频流
                 taskProgressService.updateProgress(taskId, new DownloadProgress(0, "VIDEO"));
                 downloadFileWithProgress(video.getVideoUrl(), videoFilePath, (downloaded, total) -> {

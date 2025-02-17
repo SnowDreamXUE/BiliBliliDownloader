@@ -282,7 +282,17 @@ export default {
       };
 
       try {
-        const { data: taskId } = await axios.post('/downloadVideo', videoData);
+        const response = await axios.post('/downloadVideo', videoData);
+        if (response.status === 409) {// 文件已存在
+          this.$notify.warning({
+            title: '文件已存在',
+            message: `%{item.title} 已经下载过，无需重复下载`,
+          });
+          this.removeDownloadItem(item.cid);
+          return;
+        }
+
+        const taskId = response.data
         this.$set(this.progresses, item.cid, { progress: 0, stage: 'INIT' });
 
         const checkProgress = async () => {
@@ -314,10 +324,17 @@ export default {
 
         checkProgress();
       } catch (error) {
-        this.$notify.error({
-          title: '下载失败',
-          message: error.message
-        });
+        if (error.response && error.response.status === 409) { // 特殊处理文件已存在的错误
+          this.$notify.warning({
+            title: '文件已存在',
+            message: `${item.title} 已经下载过，无需重复下载`
+          });
+        } else {
+          this.$notify.error({
+            title: '下载失败',
+            message: error.message
+          });
+        }
         this.removeDownloadItem(item.cid);
       }
     },
