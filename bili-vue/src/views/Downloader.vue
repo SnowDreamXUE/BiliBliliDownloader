@@ -13,7 +13,15 @@
         <div class="download-item-top">
           <div class="video-title">{{ item.title }}</div>
           <div class="download-action">
-            <el-button type="primary" round size="mini" @click="downVideo(item)">下载</el-button>
+            <el-button
+                type="primary"
+                round size="mini"
+                @click="downVideo(item)"
+                :loading="item.status === 'downloading'"
+                :disabled="item.status === 'downloading'"
+            >
+              {{ getButtonText(item) }}
+            </el-button>
           </div>
         </div>
         <div class="video-select">
@@ -24,6 +32,7 @@
                 size="small"
                 placeholder="选择音频码率"
                 @change="selectDownloadFormat(item)"
+                :disabled="item.status === 'downloading'"
             >
               <el-option
                   v-for="(value, key) in audioIds"
@@ -41,6 +50,7 @@
                 size="small"
                 placeholder="选择清晰度"
                 @change="selectDownloadFormat(item)"
+                :disabled="item.status === 'downloading'"
             >
               <el-option
                   v-for="video in filteredVideos(item)"
@@ -50,7 +60,15 @@
               ></el-option>
             </el-select>
           </div>
-
+        </div>
+        <div v-if="item.status === 'downloading'" class="progress-container">
+          <div class="progress-info">
+            {{ getProgressText(item) }}
+          </div>
+          <el-progress
+              :percentage="progresses[item.cid]?.progress || 0"
+              :status="getProgressType(item)"
+          ></el-progress>
         </div>
       </div>
     </div>
@@ -74,6 +92,7 @@ export default {
       pages: [],          // 所有分集信息
       selectedPages: [],  // 选中的分集索引
       downloadUrls: [],   // 分集下载链接
+      progresses: {}, // 存储结构：{ cid: 进度百分比 }
       audioIds: { // 音频码率
         '30280': "192K",
         '30216': "64K",
@@ -213,34 +232,101 @@ export default {
       }
     },
 
-    // 单视频下载
-    downVideo(item) {
-      let videoData = {
+    getButtonText(item) {
+      if (item.status === 'downloading') {
+        return '下载中';
+      }
+      return '下载';
+    },
+
+    getProgressText(item) {
+      const progress = this.progresses[item.cid];
+      if (!progress) return '';
+
+      switch (progress.stage) {
+        case 'VIDEO':
+          return '下载视频流...';
+        case 'AUDIO':
+          return '下载音频流...';
+        case 'MERGE':
+          return '合并音视频...';
+        case 'COMPLETE':
+          return '下载完成';
+        default:
+          return '准备下载...';
+      }
+    },
+
+    // 修改这个方法来返回正确的 status 值
+    getProgressType(item) {
+      const progress = this.progresses[item.cid];
+      if (!progress) {
+        return null; // undefined 也是有效的状态值
+      }
+
+      if (progress.stage === 'COMPLETE') {
+        return 'success';
+      }
+      return null; // 返回 undefined 而不是空字符串
+    },
+
+    async downVideo(item) {
+      // 设置下载状态
+      this.$set(item, 'status', 'downloading');
+
+      const videoData = {
         title: item.title,
         videoUrl: item.videoUrl,
         audioUrl: item.audioUrl,
         qn: item.qn
-      }
-      axios.post(`/downloadVideo`, videoData).then(res => {
-        this.$notify.info({
-          title: '下载成功',
-          message: res.data,
-          duration: 3000
-        })
+      };
 
-        // 新增：下载成功后移除当前项
-        const index = this.downloadUrls.findIndex(d => d.cid === item.cid);
-        if (index !== -1) {
-          this.downloadUrls.splice(index, 1);
-        }
-        this.removeSelectedPage(item.cid);
-      }).catch(error => {
+      try {
+        const { data: taskId } = await axios.post('/downloadVideo', videoData);
+        this.$set(this.progresses, item.cid, { progress: 0, stage: 'INIT' });
+
+        const checkProgress = async () => {
+          try {
+            const { data: progressData } = await axios.get(`/task/${taskId}/progress`);
+
+            this.$set(this.progresses, item.cid, {
+              progress: progressData.progress,
+              stage: progressData.stage
+            });
+
+            if (progressData.stage !== 'COMPLETE') {
+              setTimeout(checkProgress, 1000);
+            } else {
+              this.$notify.success({
+                title: '下载完成',
+                message: `${item.title} 下载成功`
+              });
+              setTimeout(() => this.removeDownloadItem(item.cid), 2000);
+            }
+          } catch (error) {
+            this.$notify.error({
+              title: '下载失败',
+              message: error.message
+            });
+            this.removeDownloadItem(item.cid);
+          }
+        };
+
+        checkProgress();
+      } catch (error) {
         this.$notify.error({
           title: '下载失败',
-          message: error.message,
-          duration: 3000
+          message: error.message
         });
-      })
+        this.removeDownloadItem(item.cid);
+      }
+    },
+
+    removeDownloadItem(cid) {
+      delete this.progresses[cid];
+      const index = this.downloadUrls.findIndex(d => d.cid === cid);
+      if (index !== -1) this.downloadUrls.splice(index, 1);
+      this.removeSelectedPage(cid);
     },
 
     // 测试使用downVideo方法
@@ -362,5 +448,14 @@ export default {
 .select-quality {
   width: 120px;
   margin-right: 20px;
+}
+
+.progress-container {
+  margin-top: 10px;
+}
+.progress-info {
+  margin-bottom: 5px;
+  font-size: 12px;
+  color: #606266;
 }
 </style>

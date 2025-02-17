@@ -1,83 +1,132 @@
 package com.snow.controller;
 
-import cn.hutool.http.HttpUtil;
-import com.snow.utils.Video;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
 
-import java.io.File;
+import com.snow.service.TaskProgressService;
+import com.snow.utils.DownloadProgress;
+
+import com.snow.utils.Video;
+import com.snow.utils.ProgressListener;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.concurrent.CompletableFuture;
 
 @RestController
 public class DownloadController {
 
+    @Autowired
+    private TaskProgressService taskProgressService;
+
     private static final String downloadPath = "download/";
 
     @PostMapping("/downloadVideo")
-    public String downloadVideo(@RequestBody Video video) {
+    public ResponseEntity<String> downloadVideo(@RequestBody Video video) {
+        String taskId = taskProgressService.createNewTask();
 
-        String title = video.getTitle();
-        String videoUrl = video.getVideoUrl();
-        String audioUrl = video.getAudioUrl();
+        CompletableFuture.runAsync(() -> {
+            try {
+                String title = video.getTitle();
+                String videoFilePath = downloadPath + title + "_video.m4s";
+                String audioFilePath = downloadPath + title + "_audio.m4s";
+                String mergedFilePath = downloadPath + title + ".mp4";
 
-        File dir = new File(downloadPath);
-        if (!dir.exists()) {
-            dir.mkdirs();
-        }
+                // 下载视频流
+                taskProgressService.updateProgress(taskId, new DownloadProgress(0, "VIDEO"));
+                downloadFileWithProgress(video.getVideoUrl(), videoFilePath, (downloaded, total) -> {
+                    int progress = (int) ((downloaded * 100) / total);
+                    int finalProgress = progress / 3;  // 视频下载占总进度的1/3
+                    taskProgressService.updateProgress(taskId, new DownloadProgress(finalProgress, "VIDEO"));
+                });
 
-        String videoFilePath = downloadPath + title + "_video.m4s";
-        String audioFilePath = downloadPath + title + "_audio.m4s";
-        String mergedFilePath = downloadPath + title + ".mp4";
+                // 下载音频流
+                taskProgressService.updateProgress(taskId, new DownloadProgress(33, "AUDIO"));
+                downloadFileWithProgress(video.getAudioUrl(), audioFilePath, (downloaded, total) -> {
+                    int progress = (int) ((downloaded * 100) / total);
+                    int finalProgress = 33 + (progress / 3);  // 音频下载占总进度的1/3
+                    taskProgressService.updateProgress(taskId, new DownloadProgress(finalProgress, "AUDIO"));
+                });
 
-        downloadFile(videoUrl, videoFilePath);
-        downloadFile(audioUrl, audioFilePath);
-        mergeVideoAndAudio(videoFilePath, audioFilePath, mergedFilePath);
+                // 合并音视频
+                taskProgressService.updateProgress(taskId, new DownloadProgress(66, "MERGE"));
+                mergeVideoAndAudio(videoFilePath, audioFilePath, mergedFilePath);
 
-        // 检查合并是否成功
-        File mergedFile = new File(mergedFilePath);
-        if (mergedFile.exists()) {
-            // 删除原始的视频和音频文件
-            new File(videoFilePath).delete();
-            new File(audioFilePath).delete();
-            return "合并成功！文件储存在：" + mergedFile.getAbsolutePath();
-        } else {
-            return "合并后的文件不存在，未删除原始文件！";
-        }
+                // 完成
+                taskProgressService.updateProgress(taskId, new DownloadProgress(100, "COMPLETE"));
 
+                // 清理临时文件
+                new File(videoFilePath).delete();
+                new File(audioFilePath).delete();
+
+                // 延迟移除任务
+                Thread.sleep(2000);
+                taskProgressService.removeTask(taskId);
+            } catch (Exception e) {
+                e.printStackTrace();
+                taskProgressService.removeTask(taskId);
+            }
+        });
+
+        return ResponseEntity.ok(taskId);
     }
 
-    /**
-     * 下载文件
-     *
-     * @param url      文件URL
-     * @param filePath 保存路径
-     */
-    private static void downloadFile(String url, String filePath) {
-        HttpUtil.createGet(url)
-                .header("Referer", "https://www.bilibili.com")
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-                .execute()
-                .writeBody(new File(filePath));
+    @GetMapping("/task/{taskId}/progress")
+    public ResponseEntity<DownloadProgress> getProgress(@PathVariable String taskId) {
+        DownloadProgress progress = taskProgressService.getProgress(taskId);
+        return progress != null ? ResponseEntity.ok(progress) : ResponseEntity.notFound().build();
     }
 
-    /**
-     * 合并音视频文件
-     *
-     * @param videoFilePath 视频文件路径
-     * @param audioFilePath 音频文件路径
-     * @param mergedFilePath 输出文件路径
-     */
-    private static void mergeVideoAndAudio(String videoFilePath, String audioFilePath, String mergedFilePath) {
+    private void downloadFileWithProgress(String url, String filePath, ProgressListener listener) {
         try {
-            // 使用 FFmpeg 合并音视频
-            // 更换ffmpeg路径
-            String ffmpegCommand = String.format("D:/Program Files/ffmpeg-7.1-essentials_build/bin/ffmpeg -i %s -i %s -c copy %s", videoFilePath, audioFilePath, mergedFilePath);
-            Process process = Runtime.getRuntime().exec(ffmpegCommand);
-            process.waitFor(); // 等待合并完成
+            URL urlObj = new URL(url);
+            HttpURLConnection conn = (HttpURLConnection) urlObj.openConnection();
+            conn.setRequestProperty("Referer", "https://www.bilibili.com");
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
 
-        } catch (Exception e) {
-            e.printStackTrace();
-            System.err.println("合并音视频时出错: " + e.getMessage());
+            int contentLength = conn.getContentLength();
+            try (InputStream in = conn.getInputStream();
+                 FileOutputStream fos = new FileOutputStream(filePath)) {
+
+                byte[] buffer = new byte[8192];
+                int len;
+                long downloaded = 0;
+
+                while ((len = in.read(buffer)) > 0) {
+                    fos.write(buffer, 0, len);
+                    downloaded += len;
+                    if (listener != null && contentLength > 0) {
+                        listener.onProgress(downloaded, contentLength);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("下载文件失败: " + e.getMessage());
         }
     }
+
+    private void mergeVideoAndAudio(String videoPath, String audioPath, String outputPath) {
+        try {
+            String ffmpegPath = "D:/Program Files/ffmpeg-7.1-essentials_build/bin/ffmpeg";
+            ProcessBuilder pb = new ProcessBuilder(
+                    ffmpegPath,
+                    "-i", videoPath,
+                    "-i", audioPath,
+                    "-c", "copy",
+                    outputPath
+            );
+
+            Process process = pb.start();
+            process.waitFor();
+
+            if (process.exitValue() != 0) {
+                throw new RuntimeException("FFmpeg合并失败");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("合并音视频失败: " + e.getMessage());
+        }
+    }
+
 }
