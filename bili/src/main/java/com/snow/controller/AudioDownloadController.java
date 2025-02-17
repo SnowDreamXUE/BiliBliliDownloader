@@ -2,6 +2,7 @@ package com.snow.controller;
 
 import cn.hutool.http.HttpUtil;
 import com.snow.utils.Audio;
+import com.snow.utils.Constants;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -13,7 +14,7 @@ import java.io.File;
 @RestController
 public class AudioDownloadController {
 
-    private static final String downloadPath = "download/";
+    private static final String downloadPath = Constants.PATH_DOWNLOAD;
 
     @PostMapping("/downloadAudio")
     public ResponseEntity<String> downloadAudio(@RequestBody Audio audio) {
@@ -55,7 +56,7 @@ public class AudioDownloadController {
 
     private static void convertToMp3(String audioPath, String mp3Path) {
         try {
-            String ffmpegPath = "D:/Program Files/ffmpeg-7.1-essentials_build/bin/ffmpeg";
+            String ffmpegPath = Constants.PATH_FFMPEG;
             ProcessBuilder pb = new ProcessBuilder(
                     ffmpegPath,
                     "-i", audioPath, // 输入文件

@@ -2,6 +2,7 @@ package com.snow.controller;
 
 
 import com.snow.service.TaskProgressService;
+import com.snow.utils.Constants;
 import com.snow.utils.DownloadProgress;
 
 import com.snow.utils.Video;
@@ -22,7 +23,7 @@ public class DownloadController {
     @Resource
     private TaskProgressService taskProgressService;
 
-    private static final String downloadPath = "download/";
+    private static final String downloadPath = Constants.PATH_DOWNLOAD;
 
     @PostMapping("/downloadVideo")
     public ResponseEntity<String> downloadVideo(@RequestBody Video video) {
@@ -117,7 +118,7 @@ public class DownloadController {
 
     private void mergeVideoAndAudio(String videoPath, String audioPath, String outputPath) {
         try {
-            String ffmpegPath = "D:/Program Files/ffmpeg-7.1-essentials_build/bin/ffmpeg";
+            String ffmpegPath = Constants.PATH_FFMPEG;
             ProcessBuilder pb = new ProcessBuilder(
                     ffmpegPath,
                     "-i", videoPath,

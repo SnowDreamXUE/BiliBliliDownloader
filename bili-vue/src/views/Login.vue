@@ -57,57 +57,55 @@ export default {
     pollLoginStatus() {
       const POLL_INTERVAL = 6000; // 轮询间隔时间，单位为毫秒
       const MAX_POLL_TIME = 180000; // 最大轮询时间，单位为毫秒（180秒）
-      const qrcode_key = this.qrcode_key;
-
-      function login_check() {
-        axios.get("/login_check", {
-          params: {
-            qrcode_key: qrcode_key
-          }
-        }).then(response => {
-          const data = response.data.data;
-
-          if (data.code === 0) {
-            // 登录成功
-            // console.log('登录成功:', data);
-            this.getUserInfo();
-            clearInterval(this.pollingIntervalId); // 停止轮询
-          } else if (data.code === 86038) {
-            // 二维码已失效
-            console.error('二维码已失效');
-            this.$notify.error({
-              title: '二维码已失效',
-              message: '请重新生成二维码',
-              duration: 3000
-            });
-            clearInterval(this.pollingIntervalId); // 停止轮询
-          } else if (data.code === 86090 || data.code === 86101) {
-            // 继续轮询
-            // console.log('等待二维码扫描...');
-          }
-        })
-            .catch(error => {
-              // console.error('获取登录状态失败:', error);
-              this.$notify.error({
-                title: '获取登录状态失败',
-                message: error.message,
-                duration: 3000
-              });
-              clearInterval(this.pollingIntervalId); // 遇到错误时停止轮询
-            });
-      }
-
-      this.pollingIntervalId = setInterval(login_check, POLL_INTERVAL);
+      this.pollingIntervalId = setInterval(this.login_check, POLL_INTERVAL);
 
       // 设置最大轮询时间
       setTimeout(() => {
-        clearInterval(this.pollingIntervalId);
+        this.stopCheck();
         this.$notify.error({
           title: '轮询超时',
           message: '二维码可能已过期',
           duration: 3000
         })
       }, MAX_POLL_TIME);
+    },
+
+    // 检查登录状态
+    login_check() {
+      axios.get("/login_check", {
+        params: {
+          qrcode_key: this.qrcode_key
+        }
+      }).then(response => {
+        const data = response.data.data;
+
+        if (data.code === 0) {
+          // 登录成功
+          // console.log('登录成功:', data);
+          this.getUserInfo();
+          this.stopCheck(); // 停止轮询
+        } else if (data.code === 86038) {
+          // 二维码已失效
+          console.error('二维码已失效');
+          this.$notify.error({
+            title: '二维码已失效',
+            message: '请重新生成二维码',
+            duration: 3000
+          });
+          this.stopCheck(); // 停止轮询
+        } else if (data.code === 86090 || data.code === 86101) {
+          // 继续轮询
+          // console.log('等待二维码扫描...');
+        }
+      }).catch(error => {
+        // console.error('获取登录状态失败:', error);
+        this.$notify.error({
+          title: '获取登录状态失败',
+          message: error.message,
+          duration: 3000
+        });
+        this.stopCheck();
+      });
     },
 
     //终止轮询

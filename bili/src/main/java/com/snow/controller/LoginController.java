@@ -4,6 +4,7 @@ import cn.hutool.http.HttpResponse;
 import cn.hutool.http.HttpUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.snow.utils.Constants;
 import com.snow.utils.Cookie;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -17,6 +18,8 @@ import java.nio.file.Paths;
 
 @RestController
 public class LoginController {
+
+    private static final String cookiesPath = Constants.PATH_COOKIES;
 
     //生成登录二维码
     @GetMapping("/login_url")
@@ -45,18 +48,16 @@ public class LoginController {
         int code = dataNode.path("code").asInt();
 
         if (code == 0 && !dataNode.isMissingNode()) {
-
-            // 获取项目根目录，并保存 cookies.txt 到与 src 同级的 cookies 目录下
-            String projectRootPath = Paths.get("").toAbsolutePath().toString();
-            Path cookiesDirPath = Paths.get(projectRootPath, "cookies");
-            Path cookiesFilePath = cookiesDirPath.resolve("cookies.txt");
-
-            // 如果 cookies 目录不存在，则创建
-            if (!Files.exists(cookiesDirPath)) {
-                Files.createDirectories(cookiesDirPath);
+            // 确保目录存在
+            File cookiesFile = new File(cookiesPath);
+            if (!cookiesFile.getParentFile().exists()) {
+                cookiesFile.getParentFile().mkdirs();
+            }
+            if (!cookiesFile.exists()) {
+                cookiesFile.createNewFile();
             }
 
-            try (BufferedWriter writer = new BufferedWriter(new FileWriter(cookiesFilePath.toString()))) {
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(cookiesPath))) {
                 for (String cookie : response.headers().get("Set-Cookie")) {
                     writer.write(cookie + "\n");
                 }
@@ -71,7 +72,17 @@ public class LoginController {
 
     //通过获取用户信息，查看是否登录
     @GetMapping("/user_info")
-    public String userInfo() {
+    public String userInfo() throws IOException {
+
+        File cookiesFile = new File(cookiesPath);
+        if (!cookiesFile.getParentFile().exists()) {
+            cookiesFile.getParentFile().mkdirs();
+        }
+        if (!cookiesFile.exists()) {
+            cookiesFile.createNewFile();
+        }
+
+
         // 调用 Cookie 类的 getCookiesFromFile 方法，获取 cookies 字符串
         String cookiesString = new Cookie().getCookiesFromFile();
 

@@ -3,21 +3,18 @@ package com.snow.utils;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
 // 读取 cookies 文件内容
 public class Cookie {
-    public String getCookiesFromFile() {
-        // 获取项目根目录路径
-        String projectRootPath = Paths.get("").toAbsolutePath().toString();
-        Path cookiesFilePath = Paths.get(projectRootPath, "cookies", "cookies.txt");
 
+    private static final String cookiesPath = Constants.PATH_COOKIES;
+
+    public String getCookiesFromFile() {
         // 读取 cookies 文件内容
         List<String> cookiesList = new ArrayList<>();
-        try (BufferedReader reader = new BufferedReader(new FileReader(cookiesFilePath.toString()))) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(cookiesPath))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 // 提取 Cookie 的 key=value 部分
